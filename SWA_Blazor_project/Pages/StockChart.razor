@@ -5,15 +5,21 @@
 @using SWA_Blazor_project.Services
 @inject StockDataService StockService
 
-<h1>Stock Price Chart</h1>
-
 @if (stockData == null)
 {
     <p><em>Loading...</em></p>
 }
 else
 {
-    <PlotlyChart style="height: 60vh; min-height: 350px" @bind-Config="config" @bind-Layout="layout" @bind-Data="data" @ref="chart" />
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" @onclick="RefreshChart">Refresh Chart</button>
+        <button class="btn btn-secondary" @onclick="AppendData">Append New Data</button>
+    </div>
+    <p class="mt-2">Click the buttons above to refresh or append new stock data.</p>
+    <PlotlyChart style="height: 80vh; min-height: 420px" @bind-Config="config" @bind-Layout="layout" @bind-Data="data" @ref="chart" />
+
+    
+    
 }
 
 @code {
@@ -29,14 +35,14 @@ else
     protected override async Task OnInitializedAsync()
     {
         config = new Config
-        {
-            Responsive = true
-        };
+            {
+                Responsive = true
+            };
 
         layout = new Layout
-        {
-            Title = new Title {Text = "Stock View Chart" },
-            YAxis = new List<YAxis>
+            {
+                Title = new Title { Text = "Stock View Chart" },
+                YAxis = new List<YAxis>
             {
                 new()
                 {
@@ -46,7 +52,34 @@ else
                     ShowTickLabels = true
                 }
             }
-        };
+            };
+
+        await LoadInitialData();
+        await base.OnInitializedAsync();
+    }
+
+    private async Task LoadInitialData()
+    {
+        stockData = await StockService.GetStockDataAsync();
+
+        if (stockData != null)
+        {
+            data = new List<ITrace>
+            {
+                new Scatter
+                {
+                    X = stockData.Select(s => (object)s.Timestamp).ToList(),
+                    Y = stockData.Select(s => (object)s.Price).ToList(),
+                    Name = stockData.FirstOrDefault()?.Ticker ?? "Stock Price",
+                    Mode = ModeFlag.Lines | ModeFlag.Markers,
+                }
+            };
+        }
+    }
+
+    private async Task RefreshChart()
+    {
+        await chart.Clear();
 
         stockData = await StockService.GetStockDataAsync();
 
@@ -60,12 +93,26 @@ else
                     Y = stockData.Select(s => (object)s.Price).ToList(),
                     Name = stockData.FirstOrDefault()?.Ticker ?? "Stock Price",
                     Mode = ModeFlag.Lines | ModeFlag.Markers,
-
                 }
             };
 
+            await chart.AddTrace(data.First());
         }
+    }
 
-        await base.OnInitializedAsync();
+    private async Task AppendData()
+    {
+        var newStockData = await StockService.GetStockDataAsync();
+
+        if (newStockData != null && chart.Data.FirstOrDefault() is Scatter scatter)
+        {
+            var newX = newStockData.Select(s => (object)s.Timestamp).ToList();
+            var newY = newStockData.Select(s => (object)s.Price).ToList();
+
+            await chart.ExtendTrace(newX, newY, data.IndexOf(scatter));
+
+            var combinedData = stockData?.Concat(newStockData).ToArray() ?? newStockData;
+            stockData = combinedData;
+        }
     }
 }
