@@ -1,0 +1,71 @@
+﻿@page "/stockchart"
+@using Plotly.Blazor.LayoutLib
+@using Plotly.Blazor.Traces.ScatterLib
+@using SWA_Blazor_project.Models
+@using SWA_Blazor_project.Services
+@inject StockDataService StockService
+
+<h1>Stock Price Chart</h1>
+
+@if (stockData == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <PlotlyChart style="height: 60vh; min-height: 350px" @bind-Config="config" @bind-Layout="layout" @bind-Data="data" @ref="chart" />
+}
+
+@code {
+    private PlotlyChart chart;
+    private Config config;
+    private Layout layout;
+
+    private StockPrice[]? stockData;
+
+    private IList<ITrace> data = new List<ITrace>();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        config = new Config
+        {
+            Responsive = true
+        };
+
+        layout = new Layout
+        {
+            Title = new Title {Text = "Stock View Chart" },
+            YAxis = new List<YAxis>
+            {
+                new()
+                {
+                    Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title() { Text = "Price (USD)" },
+                    ShowGrid = true,
+                    ShowLine = true,
+                    ShowTickLabels = true
+                }
+            }
+        };
+
+        stockData = await StockService.GetStockDataAsync();
+
+        if (stockData != null)
+        {
+            data = new List<ITrace>
+            {
+                new Scatter
+                {
+                    X = stockData.Select(s => (object)s.Timestamp).ToList(),
+                    Y = stockData.Select(s => (object)s.Price).ToList(),
+                    Name = stockData.FirstOrDefault()?.Ticker ?? "Stock Price",
+                    Mode = ModeFlag.Lines | ModeFlag.Markers,
+
+                }
+            };
+
+        }
+
+        await base.OnInitializedAsync();
+    }
+}
