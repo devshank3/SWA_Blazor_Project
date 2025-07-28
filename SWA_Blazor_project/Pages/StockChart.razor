@@ -1,0 +1,118 @@
+﻿@page "/stockchart"
+@using Plotly.Blazor.LayoutLib
+@using Plotly.Blazor.Traces.ScatterLib
+@using SWA_Blazor_project.Models
+@using SWA_Blazor_project.Services
+@inject StockDataService StockService
+
+@if (stockData == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" @onclick="RefreshChart">Refresh Chart</button>
+        <button class="btn btn-secondary" @onclick="AppendData">Append New Data</button>
+    </div>
+    <p class="mt-2">Click the buttons above to refresh or append new stock data.</p>
+    <PlotlyChart style="height: 80vh; min-height: 420px" @bind-Config="config" @bind-Layout="layout" @bind-Data="data" @ref="chart" />
+
+    
+    
+}
+
+@code {
+    private PlotlyChart chart;
+    private Config config;
+    private Layout layout;
+
+    private StockPrice[]? stockData;
+
+    private IList<ITrace> data = new List<ITrace>();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        config = new Config
+            {
+                Responsive = true
+            };
+
+        layout = new Layout
+            {
+                Title = new Title { Text = "Stock View Chart" },
+                YAxis = new List<YAxis>
+            {
+                new()
+                {
+                    Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title() { Text = "Price (USD)" },
+                    ShowGrid = true,
+                    ShowLine = true,
+                    ShowTickLabels = true
+                }
+            }
+            };
+
+        await LoadInitialData();
+        await base.OnInitializedAsync();
+    }
+
+    private async Task LoadInitialData()
+    {
+        stockData = await StockService.GetStockDataAsync();
+
+        if (stockData != null)
+        {
+            data = new List<ITrace>
+            {
+                new Scatter
+                {
+                    X = stockData.Select(s => (object)s.Timestamp).ToList(),
+                    Y = stockData.Select(s => (object)s.Price).ToList(),
+                    Name = stockData.FirstOrDefault()?.Ticker ?? "Stock Price",
+                    Mode = ModeFlag.Lines | ModeFlag.Markers,
+                }
+            };
+        }
+    }
+
+    private async Task RefreshChart()
+    {
+        await chart.Clear();
+
+        stockData = await StockService.GetStockDataAsync();
+
+        if (stockData != null)
+        {
+            data = new List<ITrace>
+            {
+                new Scatter
+                {
+                    X = stockData.Select(s => (object)s.Timestamp).ToList(),
+                    Y = stockData.Select(s => (object)s.Price).ToList(),
+                    Name = stockData.FirstOrDefault()?.Ticker ?? "Stock Price",
+                    Mode = ModeFlag.Lines | ModeFlag.Markers,
+                }
+            };
+
+            await chart.AddTrace(data.First());
+        }
+    }
+
+    private async Task AppendData()
+    {
+        var newStockData = await StockService.GetStockDataAsync();
+
+        if (newStockData != null && chart.Data.FirstOrDefault() is Scatter scatter)
+        {
+            var newX = newStockData.Select(s => (object)s.Timestamp).ToList();
+            var newY = newStockData.Select(s => (object)s.Price).ToList();
+
+            await chart.ExtendTrace(newX, newY, data.IndexOf(scatter));
+
+            var combinedData = stockData?.Concat(newStockData).ToArray() ?? newStockData;
+            stockData = combinedData;
+        }
+    }
+}
